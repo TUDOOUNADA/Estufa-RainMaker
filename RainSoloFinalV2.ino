@@ -65,6 +65,7 @@ uint16_t VTempo1 = DEFAULT_ET1;
 uint16_t VTempo2 = DEFAULT_ET2;
 uint16_t VT1 = 0;
 uint16_t ET1 = 0;
+uint16_t ET2 = 0;
 
 //Inicia sensor de temperatura
 OneWire oneWire(gpio_T1);
@@ -79,7 +80,6 @@ static Fan *BT3 = NULL;
 static Fan *BT4 = NULL;
 static Switch *BT5 = NULL;
 static Device *BT6 = NULL;
-static Device *BT7 = NULL;
 
 //Cria variaveis de medidas para sensores
 static TemperatureSensor Temperatura("Temperatura");
@@ -163,19 +163,6 @@ void write_callback(Device *device, Param *param, const param_val_t val, void *p
       delay(50);
     }
   }
-   else if (strcmp(device_name, "Ajustes") == 0) {
-      if (strcmp(param_name, "Umidade Minima") == 0) {
-      int UmMim = val.val.i;
-      UmiMin = UmMim;
-      param->updateAndReport(val);
-      delay(50);
-    } else if (strcmp(param_name, "Umidade Maxima") == 0) {
-      int UmMax = val.val.i;
-      UmiMax = UmMax;
-      param->updateAndReport(val);
-      delay(50);
-    }
-  }
 }
 
 
@@ -184,6 +171,7 @@ void Auto() {
 
   if ((TemperaturaV > TempMax) || (OffSet)) {
     ET1=0;
+    ET2=0;
     if (VT1 <= 600) {
       digitalWrite(gpio_E1, 0);
       E_State = false;
@@ -221,21 +209,24 @@ void Auto() {
           E_State = false;
           digitalWrite(gpio_V1, 1);
           V_State = true;
-          VT1++;
       }
         else if (VT1 > 600) {
           digitalWrite(gpio_V1, 0);
           V_State = false;
           digitalWrite(gpio_E1, 1);
           E_State = true;
-          VT1++;
+          
       } else if (VT1 >= 1200) {
         VT1 = 0;
+        
       }
-      if (ET1 > ((VTempo1 + VTempo2)*600)) {
+      if (ET2 > (VTempo2*600)) {
         ET1 = 0;
         VT1 = 0;
+        ET2 = 0;
       }
+      VT1++;
+      ET2++;
     }
     ET1++;
 
@@ -290,16 +281,6 @@ void setup() {
   BT4 = new Fan("Exaustor", &gpio_E1);
   BT5 = new Switch("Manual", &gpio_M1);
   BT6 = new Device("Termostato", "esp.device.thermostat	", NULL);
-  BT7 = new Device("Ajustes", "esp.device.other", NULL);
-
-  Param Umidade1("Umidade Minima", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_UMIN), PROP_FLAG_READ | PROP_FLAG_WRITE);
-  Umidade1.addUIType(ESP_RMAKER_UI_SLIDER);
-  Umidade1.addBounds(value(0), value(100), value(2));
-  BT7->addParam(Umidade1);
-  Param Umidade2("Umidade Maxima", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_UMAX), PROP_FLAG_READ | PROP_FLAG_WRITE);
-  Umidade2.addUIType(ESP_RMAKER_UI_SLIDER);
-  Umidade2.addBounds(value(0), value(100), value(2));
-  BT7->addParam(Umidade2);
 
   Param Temperature1("Temperatura Max", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_TERMO), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Temperature1.addUIType(ESP_RMAKER_UI_SLIDER);
@@ -316,7 +297,7 @@ void setup() {
   BT6->addParam(Tempo1);
   Param Tempo2("Tempo Maximo Ventilando", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET2), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Tempo2.addUIType(ESP_RMAKER_UI_SLIDER);
-  Tempo2.addBounds(value(2), value(10), value(1));
+  Tempo2.addBounds(value(2), value(10), value(2));
   BT6->addParam(Tempo2);
 
   //Utiliza uma função de write_callback para cada botão ao precionar
@@ -326,7 +307,6 @@ void setup() {
   BT4->addCb(write_callback);
   BT5->addCb(write_callback);
   BT6->addCb(write_callback);
-  BT7->addCb(write_callback);
 
   //Adiciona os dispositivos no App
   my_node.addDevice(*BT1);
@@ -338,7 +318,6 @@ void setup() {
   my_node.addDevice(Umidade);
   my_node.addDevice(Nivel);
   my_node.addDevice(*BT6);
-  my_node.addDevice(*BT7);
   //Intervalo de 2000
   Timer.setInterval(2000);
 
@@ -392,15 +371,17 @@ void loop() {
   } else {
     if (Timer.isReady()) {
       Timer.reset();
-
-      if (ET1 != 0) {
-        ET1 = 0;
       }
     }
   }
 
   if (!M_State) {
     Auto();
+  }
+ if (M_State) {
+      ET1 = 0;
+      ET2 = 0;
+      VT1 = 0;
   }
   delay(100);
 
