@@ -8,10 +8,8 @@
 #include <SimpleTimer.h>
 
 #define DEFAULT_TERMO 30
-#define DEFAULT_UMAX 70
-#define DEFAULT_UMIN 15
 #define DEFAULT_ET1 5
-#define DEFAULT_ET2 4
+#define DEFAULT_ET2 2
 
 
 //Define Task
@@ -57,8 +55,8 @@ float UmidadeV2 = 0.0;
 float NivelV2 = 0.0;
 
 uint8_t NivMin = 30;
-uint8_t UmiMin = DEFAULT_UMIN;
-uint8_t UmiMax = DEFAULT_UMAX;
+uint8_t UmiMin = 15;
+uint8_t UmiMax = 70;
 uint8_t TempMin = DEFAULT_TERMO;
 uint8_t TempMax = DEFAULT_TERMO;
 uint16_t VTempo1 = DEFAULT_ET1;
@@ -156,7 +154,7 @@ void write_callback(Device *device, Param *param, const param_val_t val, void *p
       VTempo1 = VTi1;
       param->updateAndReport(val);
       delay(50);
-    } else if (strcmp(param_name, "Tempo Maximo Ventilando") == 0) {
+    } else if (strcmp(param_name, "Ciclos de Ventilação") == 0) {
       int VTi2 = val.val.i;
       VTempo2 = VTi2;
       param->updateAndReport(val);
@@ -175,24 +173,25 @@ void Auto() {
       E_State = false;
       digitalWrite(gpio_V1, 1);
       V_State = true;
-      VT1++;
     }
 
-    else if (VT1 >= 600) {
+    else if (VT1 > 600) {
       digitalWrite(gpio_V1, 0);
       V_State = false;
       digitalWrite(gpio_E1, 1);
       E_State = true;
-      VT1++;
     }
 
-    else if (VT1 >= 1200) {
+    else if (VT1 > 1200) {
       VT1 = 0;
     }
-    OffSet = 1;
+      OffSet = 1;
+      VT1++;
+      ET1 = 0;
+      ET2 = 0;
   }
 
-  if ((TemperaturaV < TempMin) && (ET1<(VTempo1*600))) {
+  if ((TemperaturaV < TempMin) || (ET2<(VTempo2*600))) {
     OffSet = 0;
     digitalWrite(gpio_V1, 0);
     V_State = false;
@@ -207,39 +206,35 @@ void Auto() {
           E_State = false;
           digitalWrite(gpio_V1, 1);
           V_State = true;
-          VT1++;
       }
         else if (VT1 > 600) {
           digitalWrite(gpio_V1, 0);
           V_State = false;
           digitalWrite(gpio_E1, 1);
-          E_State = true;
-          VT1++;
-      } else if (VT1 >= 1200) {
-        VT1 = 0;
-      }
-      if (ET1 > (ET2*600)) {
+          E_State = true; } 
+          
+        else if (VT1 > 1200) { 
+          VT1 = 0;}
+        
+      if (ET2 > (VTempo2*600*2)) {
         ET1 = 0;
         ET2 = 0;
         VT1 = 0;
       }
       ET2++;
+      VT1++;
     }
     ET1++;
 
   if (WiFi.status() != WL_CONNECTED) {
-
     digitalWrite(gpio_L1, 1);
     L_State = true;
 
     if ((UmidadeV < UmiMin) && (NivelV > NivMin)) {
       digitalWrite(gpio_B1, 1);
-      B_State = true;
-    }
-
+      B_State = true }
   }
 }
-
 
 void setup() {
 
@@ -269,8 +264,7 @@ void setup() {
   //Cria um node para o aplicativo reconhecer
   Node my_node;
   my_node = RMaker.initNode("Estufa");
-
-
+  
   //Cria novos Switchs para cada variavel de botão
   BT1 = new Switch("Bomba", &gpio_B1);
   BT2 = new LightBulb("Lampada", &gpio_L1);
@@ -290,11 +284,11 @@ void setup() {
 
   Param Tempo1("Tempo para Ventilar", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET1), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Tempo1.addUIType(ESP_RMAKER_UI_SLIDER);
-  Tempo1.addBounds(value(5), value(60), value(1));
+  Tempo1.addBounds(value(1), value(45), value(1));
   BT6->addParam(Tempo1);
-  Param Tempo2("Tempo Maximo Ventilando", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET2), PROP_FLAG_READ | PROP_FLAG_WRITE);
+  Param Tempo2("Ciclos de Ventilação", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET2), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Tempo2.addUIType(ESP_RMAKER_UI_SLIDER);
-  Tempo2.addBounds(value(2), value(10), value(2));
+  Tempo2.addBounds(value(1), value(10), value(1));
   BT6->addParam(Tempo2);
 
   //Utiliza uma função de write_callback para cada botão ao precionar
@@ -368,7 +362,6 @@ void loop() {
   } else {
     if (Timer.isReady()) {
       Timer.reset();
-
     }
   }
 
@@ -385,7 +378,7 @@ void loop() {
   sensor.requestTemperatures();
   TemperaturaV = sensor.getTempCByIndex(0);  //Valor Temperatura
 
-  UmidadeV = map(analogRead(gpio_U1), 2800, 800, 0, 100);  //Valor Umidade
+  UmidadeV = map(analogRead(gpio_U1), 2900, 800, 0, 100);  //Valor Umidade
   if (UmidadeV < 0) { UmidadeV = 0; }
 
   NivelV = map(analogRead(gpio_N1), 0, 4095, 0, 100);  //Valor Nivel
