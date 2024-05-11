@@ -170,8 +170,6 @@ void write_callback(Device *device, Param *param, const param_val_t val, void *p
 void Auto() {
 
   if ((TemperaturaV > TempMax) || (OffSet)) {
-    ET1=0;
-    ET2=0;
     if (VT1 <= 600) {
       digitalWrite(gpio_E1, 0);
       E_State = false;
@@ -209,23 +207,22 @@ void Auto() {
           E_State = false;
           digitalWrite(gpio_V1, 1);
           V_State = true;
+          VT1++;
       }
         else if (VT1 > 600) {
           digitalWrite(gpio_V1, 0);
           V_State = false;
           digitalWrite(gpio_E1, 1);
           E_State = true;
-          
+          VT1++;
       } else if (VT1 >= 1200) {
         VT1 = 0;
-        
       }
-      if (ET2 > (VTempo2*600)) {
+      if (ET1 > (ET2*600)) {
         ET1 = 0;
-        VT1 = 0;
         ET2 = 0;
+        VT1 = 0;
       }
-      VT1++;
       ET2++;
     }
     ET1++;
@@ -371,19 +368,18 @@ void loop() {
   } else {
     if (Timer.isReady()) {
       Timer.reset();
-      }
+
     }
   }
+
 
   if (!M_State) {
     Auto();
   }
- if (M_State) {
-      ET1 = 0;
-      ET2 = 0;
-      VT1 = 0;
-  }
   delay(100);
+  if (M_State) {
+  ET1 = 0;
+  ET2 = 0;}
 
   //loop de leitura de sensores e modo automatico
   sensor.requestTemperatures();
