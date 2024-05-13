@@ -54,16 +54,19 @@ float TemperaturaV2 = 0.0;
 float UmidadeV2 = 0.0;
 float NivelV2 = 0.0;
 
+//Valores minimos de sensores
 uint8_t NivMin = 30;
 uint8_t UmiMin = 15;
 uint8_t UmiMax = 70;
 uint8_t TempMin = DEFAULT_TERMO;
 uint8_t TempMax = DEFAULT_TERMO;
-uint16_t VTempo1 = DEFAULT_ET1;
-uint16_t VTempo2 = DEFAULT_ET2;
+
+//Variaveis de tempo
 uint16_t VT1 = 0;
 uint16_t ET1 = 0;
+uint16_t VTempo1 = DEFAULT_ET1;
 uint16_t ET2 = 0;
+uint16_t VTempo2 = DEFAULT_ET2;
 
 //Inicia sensor de temperatura
 OneWire oneWire(gpio_T1);
@@ -199,7 +202,6 @@ void Auto() {
     E_State = false;
     VT1 = 0;
   }
-
       if ((ET1 > (VTempo1*600)) && !OffSet ) {
         if (VT1 <= 600) {
           digitalWrite(gpio_E1, 0);
@@ -211,7 +213,8 @@ void Auto() {
           digitalWrite(gpio_V1, 0);
           V_State = false;
           digitalWrite(gpio_E1, 1);
-          E_State = true; } 
+          E_State = true; 
+          } 
           
         else if (VT1 > 1200) { 
           VT1 = 0;}
@@ -274,6 +277,7 @@ void setup() {
   BT5 = new Switch("Manual", &gpio_M1);
   BT6 = new Device("Termostato", "esp.device.thermostat	", NULL);
 
+  //Parametro de temperatura para termostato
   Param Temperature1("Temperatura Max", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_TERMO), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Temperature1.addUIType(ESP_RMAKER_UI_SLIDER);
   Temperature1.addBounds(value(0), value(40), value(1));
@@ -283,6 +287,7 @@ void setup() {
   Temperature2.addBounds(value(0), value(40), value(1));
   BT6->addParam(Temperature2);
 
+  //Parametro de tempo para termostato
   Param Tempo1("Tempo para Ventilar", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET1), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Tempo1.addUIType(ESP_RMAKER_UI_SLIDER);
   Tempo1.addBounds(value(1), value(45), value(1));
@@ -334,6 +339,7 @@ void setup() {
   BT3->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
   BT4->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
   BT5->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+  
   //habilita segundo nucleo
   xTaskCreatePinnedToCore(Task1code, "Task1", 10000, NULL, 1, &Task1, 0);
 }
@@ -360,43 +366,58 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     digitalWrite(gpio_M1, 0);
     M_State = false;
-  } else {
+  } else 
+    {
     if (Timer.isReady()) {
-      Timer.reset();
+      Timer.reset();}
     }
-  }
 
-
+  //Ativa o automatico com o modo manual desativado
   if (!M_State) {
     Auto();
   }
-  delay(100);
-  if (M_State) {
+
+  //Zera quando modo manual ativo
+  if (M_State) { 
+  if(VT1!=0||ET1!=0||ET2!=0){
   ET1 = 0;
-  ET1 = 0;
-  ET2 = 0;}
+  ET2 = 0;
+  VT1 = 0;}
+}
+  delay(100); //Delay do loop
 
   //loop de leitura de sensores e modo automatico
   sensor.requestTemperatures();
   TemperaturaV = sensor.getTempCByIndex(0);  //Valor Temperatura
 
-  if (UmidadeV < 100&&UmidadeV>0) {
+  if ((UmidadeV < 100) && (UmidadeV>0)) {
   UmidadeV = map(analogRead(gpio_U1), 2900, 800, 0, 100);  //Valor Umidade
   }
 
   NivelV = map(analogRead(gpio_N1), 0, 4095, 0, 100);  //Valor Nivel
+
+Serial.print("Sensor N: ");
+Serial.println(NivelV);
+Serial.print("Sensor N2: ");
+Serial.println(NivelV2);
+
+Serial.print("Sensor U: ");
+Serial.println(UmidadeV);
+Serial.print("Sensor U2: ");
+Serial.println(UmidadeV2);
 
   //Desliga bomba quando nivel baixo ou umidade alta
   if ((NivelV > NivMin) && (Flag)) {
     Flag = 0;
   }
 
+//Programação de segurança
   if ((NivelV < NivMin) || (UmidadeV > UmiMax)) {
     digitalWrite(gpio_B1, 0);
     B_State = false;
 
     if ((!Flag) && (NivelV < NivMin)) {
-      esp_rmaker_raise_alert("Nível d'agua baixo !\nNecessário reabastecer");
+      esp_rmaker_raise_alert("Nível d'agua baixo!\nNecessário reabastecer");
       Flag = 1;
       delay(50);
     }
@@ -404,28 +425,29 @@ void loop() {
 }
 
 void loop_2() {
-  //Leitura de sensores e cargas
-  if (WiFi.status() == WL_CONNECTED) {
 
+  //Envio de valor dos sensores e estado das cargas
+  if (WiFi.status() == WL_CONNECTED) {
+    //Sensores
     if(((TemperaturaV-TemperaturaV2)>1.5)||((TemperaturaV-TemperaturaV2)<-1.5)){
     Temperatura.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, TemperaturaV);
     TemperaturaV2=TemperaturaV;
     delay(50);
     }
 
-    if(((UmidadeV-UmidadeV2)>10)||((UmidadeV-UmidadeV2)<-10)){
+    if(((UmidadeV-UmidadeV2)>5.0)||((UmidadeV-UmidadeV2)<-5.0)){
     Umidade.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, UmidadeV);
     UmidadeV2=UmidadeV;
-    delay(50);
+    delay(100);
     }
 
-    if(((NivelV-NivelV2)>10)||((NivelV-NivelV2)<-10)){
+    if(((NivelV-NivelV2)>5.0)||((NivelV-NivelV2)<-5.0)){
     Nivel.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, NivelV);
     NivelV2=NivelV;
-    delay(50);
+    delay(100);
     } 
 
-
+    //Cargas
     if ((B_State) != (B_State2)) {
       BT1->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, B_State);
       B_State2 = B_State;
