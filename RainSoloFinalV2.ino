@@ -74,8 +74,8 @@ SimpleTimer Timer;
 //Cria variaveis de Switch para cada botão
 static Switch *BT1 = NULL;
 static LightBulb *BT2 = NULL;
-static Fan *BT3 = NULL;
-static Fan *BT4 = NULL;
+static Switch *BT3 = NULL;
+static Switch *BT4 = NULL;
 static Switch *BT5 = NULL;
 static Device *BT6 = NULL;
 
@@ -191,7 +191,7 @@ void Auto() {
       ET2 = 0;
   }
 
-  if ((TemperaturaV < TempMin) || (ET2<(VTempo2*600))) {
+  if ((TemperaturaV < TempMin) && (ET2<(VTempo2*600))) {
     OffSet = 0;
     digitalWrite(gpio_V1, 0);
     V_State = false;
@@ -224,7 +224,8 @@ void Auto() {
       ET2++;
       VT1++;
     }
-    ET1++;
+    if (ET1<=VTempo1){
+    ET1++;}
 
   if (WiFi.status() != WL_CONNECTED) {
     digitalWrite(gpio_L1, 1);
@@ -232,7 +233,7 @@ void Auto() {
 
     if ((UmidadeV < UmiMin) && (NivelV > NivMin)) {
       digitalWrite(gpio_B1, 1);
-      B_State = true }
+      B_State = true; }
   }
 }
 
@@ -241,7 +242,7 @@ void setup() {
   // Definir pinos, serial e inicio do sensor
   Serial.begin(115200);
   sensor.begin();
-  sensor.setResolution(9);
+  sensor.setResolution(10);
 
   pinMode(gpio_B1, OUTPUT);
   pinMode(gpio_E1, OUTPUT);
@@ -268,8 +269,8 @@ void setup() {
   //Cria novos Switchs para cada variavel de botão
   BT1 = new Switch("Bomba", &gpio_B1);
   BT2 = new LightBulb("Lampada", &gpio_L1);
-  BT3 = new Fan("Ventilador", &gpio_V1);
-  BT4 = new Fan("Exaustor", &gpio_E1);
+  BT3 = new Switch("Ventilador", &gpio_V1);
+  BT4 = new Switch("Exaustor", &gpio_E1);
   BT5 = new Switch("Manual", &gpio_M1);
   BT6 = new Device("Termostato", "esp.device.thermostat	", NULL);
 
@@ -372,14 +373,16 @@ void loop() {
   delay(100);
   if (M_State) {
   ET1 = 0;
+  ET1 = 0;
   ET2 = 0;}
 
   //loop de leitura de sensores e modo automatico
   sensor.requestTemperatures();
   TemperaturaV = sensor.getTempCByIndex(0);  //Valor Temperatura
 
+  if (UmidadeV < 100&&UmidadeV>0) {
   UmidadeV = map(analogRead(gpio_U1), 2900, 800, 0, 100);  //Valor Umidade
-  if (UmidadeV < 0) { UmidadeV = 0; }
+  }
 
   NivelV = map(analogRead(gpio_N1), 0, 4095, 0, 100);  //Valor Nivel
 
