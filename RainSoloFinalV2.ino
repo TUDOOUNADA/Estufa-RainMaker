@@ -7,6 +7,7 @@
 #include <esp_task_wdt.h>
 #include <SimpleTimer.h>
 
+//Define valores minimo
 #define DEFAULT_TERMO 30
 #define DEFAULT_ET1 5
 #define DEFAULT_ET2 2
@@ -19,13 +20,14 @@ TaskHandle_t Task1;
 const char *service_name = "Estufa";
 const char *pop = "Tomatinho";
 
-// Definir pinos
+// Define pinos de cargas
 uint8_t gpio_B1 = 13;
 uint8_t gpio_V1 = 12;
 uint8_t gpio_E1 = 14;
 uint8_t gpio_L1 = 16;
 uint8_t gpio_M1 = 17;
 
+// Define pinos de Sensores
 uint8_t gpio_U1 = 35;
 uint8_t gpio_N1 = 34;
 uint8_t gpio_T1 = 27;
@@ -38,6 +40,8 @@ bool V_State = LOW;
 bool E_State = LOW;
 bool M_State = LOW;
 bool L_State = LOW;
+
+//Flags de estados e variaveis
 bool B_State2 = LOW;
 bool V_State2 = LOW;
 bool E_State2 = LOW;
@@ -54,7 +58,7 @@ float TemperaturaV2 = 0.0;
 float UmidadeV2 = 0.0;
 float NivelV2 = 0.0;
 
-//Valores minimos de sensores
+//Valores minimos e padrão de sensores
 uint8_t NivMin = 30;
 uint8_t UmiMin = 15;
 uint8_t UmiMax = 70;
@@ -166,35 +170,18 @@ void write_callback(Device *device, Param *param, const param_val_t val, void *p
   }
 }
 
-
 //Função de Controle automatico
 void Auto() {
 
-  if ((TemperaturaV > TempMax) || (OffSet)) {
-    if (VT1 <= 600) {
-      digitalWrite(gpio_E1, 0);
-      E_State = false;
-      digitalWrite(gpio_V1, 1);
-      V_State = true;
-    }
-
-    else if (VT1 > 600) {
-      digitalWrite(gpio_V1, 0);
-      V_State = false;
-      digitalWrite(gpio_E1, 1);
-      E_State = true;
-    }
-
-    else if (VT1 > 1200) {
-      VT1 = 0;
-    }
+  //Inicio de ventilação por temperatura
+  if (((TemperaturaV > TempMax) || (OffSet)) && (ET2!=0)) {
+      Ciclo();
       OffSet = 1;
-      VT1++;
-      ET1 = 0;
-      ET2 = 0;
+      if (ET1!=0){ET1 = 0;}
   }
 
-  if ((TemperaturaV < TempMin) && (ET2<(VTempo2*600))) {
+  //Desliga de ventilação por tempo
+  else if (((TemperaturaV < TempMin) && (ET1<(VTempo1*600)))) {
     OffSet = 0;
     digitalWrite(gpio_V1, 0);
     V_State = false;
@@ -202,47 +189,41 @@ void Auto() {
     E_State = false;
     VT1 = 0;
   }
-      if ((ET1 > (VTempo1*600)) && !OffSet ) {
-        if (VT1 <= 600) {
-          digitalWrite(gpio_E1, 0);
-          E_State = false;
-          digitalWrite(gpio_V1, 1);
-          V_State = true;
-      }
-        else if (VT1 > 600) {
-          digitalWrite(gpio_V1, 0);
-          V_State = false;
-          digitalWrite(gpio_E1, 1);
-          E_State = true; 
-          } 
-          
-        else if (VT1 > 1200) { 
-          VT1 = 0;}
-        
+
+  //Inicio de ventilação por tempo
+  if ((ET1 > (VTempo1*600)) && !OffSet ) {
+      Ciclo();
       if (ET2 > (VTempo2*600*2)) {
         ET1 = 0;
         ET2 = 0;
         VT1 = 0;
+          digitalWrite(gpio_V1, 0);
+          V_State = false;
+          digitalWrite(gpio_E1, 0);
+          E_State = false;
       }
       ET2++;
-      VT1++;
     }
-    if (ET1<=VTempo1){
-    ET1++;}
+  else if ((ET1<=(VTempo1*600))||!OffSet){
+  ET1++;
+  }
 
+  //Caso sem conexão
   if (WiFi.status() != WL_CONNECTED) {
+
     digitalWrite(gpio_L1, 1);
     L_State = true;
 
     if ((UmidadeV < UmiMin) && (NivelV > NivMin)) {
       digitalWrite(gpio_B1, 1);
-      B_State = true; }
+      B_State = true; 
+    }
   }
 }
 
 void setup() {
 
-  // Definir pinos, serial e inicio do sensor
+  //Definir pinos, serial e inicio do sensor
   Serial.begin(115200);
   sensor.begin();
   sensor.setResolution(10);
@@ -287,7 +268,7 @@ void setup() {
   Temperature2.addBounds(value(0), value(40), value(1));
   BT6->addParam(Temperature2);
 
-  //Parametro de tempo para termostato
+  //Parametro de tempo e ciclo para termostato
   Param Tempo1("Tempo para Ventilar", ESP_RMAKER_PARAM_RANGE, value(DEFAULT_ET1), PROP_FLAG_READ | PROP_FLAG_WRITE);
   Tempo1.addUIType(ESP_RMAKER_UI_SLIDER);
   Tempo1.addBounds(value(1), value(45), value(1));
@@ -315,6 +296,7 @@ void setup() {
   my_node.addDevice(Umidade);
   my_node.addDevice(Nivel);
   my_node.addDevice(*BT6);
+
   //Intervalo de 2000
   Timer.setInterval(2000);
 
@@ -344,6 +326,7 @@ void setup() {
   xTaskCreatePinnedToCore(Task1code, "Task1", 10000, NULL, 1, &Task1, 0);
 }
 
+//Loop Geral
 void loop() {
 
   // Botão de boot para reiniciar configuraçoes do wifi ou ESP32
@@ -365,8 +348,9 @@ void loop() {
   //Condição quando conectado a internet
   if (WiFi.status() != WL_CONNECTED) {
     digitalWrite(gpio_M1, 0);
-    M_State = false;
-  } else 
+    M_State = false;} 
+
+  else 
     {
     if (Timer.isReady()) {
       Timer.reset();}
@@ -382,40 +366,45 @@ void loop() {
   if(VT1!=0||ET1!=0||ET2!=0){
   ET1 = 0;
   ET2 = 0;
-  VT1 = 0;}
+  VT1 = 0;
+  }
 }
+
   delay(100); //Delay do loop
 
   //loop de leitura de sensores e modo automatico
   sensor.requestTemperatures();
   TemperaturaV = sensor.getTempCByIndex(0);  //Valor Temperatura
 
-  if ((UmidadeV < 100) && (UmidadeV>0)) {
-  UmidadeV = map(analogRead(gpio_U1), 2900, 800, 0, 100);  //Valor Umidade
+  if (((analogRead(gpio_U1)) <= 4095) && ((analogRead(gpio_U1)) >= 1800)) {
+  UmidadeV = map(analogRead(gpio_U1), 4095, 1800, 0, 100);  //Valor Umidade
   }
 
+  if (((analogRead(gpio_N1)) <= 4095) && ((analogRead(gpio_N1)) >= 0)) {
   NivelV = map(analogRead(gpio_N1), 0, 4095, 0, 100);  //Valor Nivel
+  }
 
-Serial.print("Sensor N: ");
-Serial.println(NivelV);
-Serial.print("Sensor N2: ");
-Serial.println(NivelV2);
+//Serial.print("Sensor N: ");
+//Serial.println(NivelV);
+//Serial.print("Sensor n: ");
+//Serial.println(analogRead(gpio_N1));
 
-Serial.print("Sensor U: ");
-Serial.println(UmidadeV);
-Serial.print("Sensor U2: ");
-Serial.println(UmidadeV2);
+//Serial.print("Sensor U: ");
+//Serial.println(UmidadeV);
+//Serial.print("Sensor : ");
+//Serial.println(analogRead(gpio_U1));
 
-  //Desliga bomba quando nivel baixo ou umidade alta
+  //Programação de segurança da bomba
   if ((NivelV > NivMin) && (Flag)) {
     Flag = 0;
   }
 
-//Programação de segurança
+  //Desliga bomba quando nivel baixo ou umidade alta
   if ((NivelV < NivMin) || (UmidadeV > UmiMax)) {
     digitalWrite(gpio_B1, 0);
     B_State = false;
-
+    
+    //Aviso de nivel de agua
     if ((!Flag) && (NivelV < NivMin)) {
       esp_rmaker_raise_alert("Nível d'agua baixo!\nNecessário reabastecer");
       Flag = 1;
@@ -424,30 +413,31 @@ Serial.println(UmidadeV2);
   }
 }
 
+//Loop de envio de valor dos sensores e estado das cargas
 void loop_2() {
 
-  //Envio de valor dos sensores e estado das cargas
   if (WiFi.status() == WL_CONNECTED) {
-    //Sensores
+
+    //Envio de sensores
     if(((TemperaturaV-TemperaturaV2)>1.5)||((TemperaturaV-TemperaturaV2)<-1.5)){
     Temperatura.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, TemperaturaV);
     TemperaturaV2=TemperaturaV;
     delay(50);
     }
 
-    if(((UmidadeV-UmidadeV2)>5.0)||((UmidadeV-UmidadeV2)<-5.0)){
+    if(((UmidadeV-UmidadeV2)>7.5)||((UmidadeV-UmidadeV2)<-7.5)){
     Umidade.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, UmidadeV);
     UmidadeV2=UmidadeV;
     delay(100);
     }
 
-    if(((NivelV-NivelV2)>5.0)||((NivelV-NivelV2)<-5.0)){
+    if(((NivelV-NivelV2)>7.5)||((NivelV-NivelV2)<-7.5)){
     Nivel.updateAndReportParam(ESP_RMAKER_DEF_TEMPERATURE_NAME, NivelV);
     NivelV2=NivelV;
     delay(100);
     } 
 
-    //Cargas
+    //Envio de cargas
     if ((B_State) != (B_State2)) {
       BT1->updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, B_State);
       B_State2 = B_State;
@@ -477,5 +467,5 @@ void loop_2() {
       delay(50);
     }
   }
-  delay(500);
+  delay(400);
 }
