@@ -59,7 +59,7 @@ float UmidadeV2 = 0.0;
 float NivelV2 = 0.0;
 
 //Valores minimos e padrão de sensores
-uint8_t NivMin = 30;
+uint8_t NivMin = 90;
 uint8_t UmiMin = 15;
 uint8_t UmiMax = 70;
 uint8_t TempMin = DEFAULT_TERMO;
@@ -170,57 +170,7 @@ void write_callback(Device *device, Param *param, const param_val_t val, void *p
   }
 }
 
-//Função de Controle automatico
-void Auto() {
-
-  //Inicio de ventilação por temperatura
-  if (((TemperaturaV > TempMax) || (OffSet)) && (ET2!=0)) {
-      Ciclo();
-      OffSet = 1;
-      if (ET1!=0){ET1 = 0;}
-  }
-
-  //Desliga de ventilação por tempo
-  else if (((TemperaturaV < TempMin) && (ET1<(VTempo1*600)))) {
-    OffSet = 0;
-    digitalWrite(gpio_V1, 0);
-    V_State = false;
-    digitalWrite(gpio_E1, 0);
-    E_State = false;
-    VT1 = 0;
-  }
-
-  //Inicio de ventilação por tempo
-  if ((ET1 > (VTempo1*600)) && !OffSet ) {
-      Ciclo();
-      if (ET2 > (VTempo2*600*2)) {
-        ET1 = 0;
-        ET2 = 0;
-        VT1 = 0;
-          digitalWrite(gpio_V1, 0);
-          V_State = false;
-          digitalWrite(gpio_E1, 0);
-          E_State = false;
-      }
-      ET2++;
-    }
-  else if ((ET1<=(VTempo1*600))||!OffSet){
-  ET1++;
-  }
-
-  //Caso sem conexão
-  if (WiFi.status() != WL_CONNECTED) {
-
-    digitalWrite(gpio_L1, 1);
-    L_State = true;
-
-    if ((UmidadeV < UmiMin) && (NivelV > NivMin)) {
-      digitalWrite(gpio_B1, 1);
-      B_State = true; 
-    }
-  }
-}
-
+//Inicia uma vez
 void setup() {
 
   //Definir pinos, serial e inicio do sensor
@@ -383,16 +333,6 @@ void loop() {
   if (((analogRead(gpio_N1)) <= 4095) && ((analogRead(gpio_N1)) >= 0)) {
   NivelV = map(analogRead(gpio_N1), 0, 4095, 0, 100);  //Valor Nivel
   }
-
-//Serial.print("Sensor N: ");
-//Serial.println(NivelV);
-//Serial.print("Sensor n: ");
-//Serial.println(analogRead(gpio_N1));
-
-//Serial.print("Sensor U: ");
-//Serial.println(UmidadeV);
-//Serial.print("Sensor : ");
-//Serial.println(analogRead(gpio_U1));
 
   //Programação de segurança da bomba
   if ((NivelV > NivMin) && (Flag)) {
